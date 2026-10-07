@@ -15,7 +15,9 @@ See what's listening on your ports and kill it in one click. A small native GTK4
 
 For now you need to build it from source. Ready-made packages are coming soon.
 
-### 1. Install dependencies
+### Build from source
+
+#### 1. Install dependencies
 
 You need Rust (1.85 or newer, get it from [rustup.rs](https://rustup.rs)) and the GTK4 and libadwaita development files.
 
@@ -39,7 +41,7 @@ sudo pacman -S base-devel gtk4 libadwaita
 
 GTK 4.12+ and libadwaita 1.7+ are required.
 
-### 2. Build and run
+#### 2. Build and run
 
 ```sh
 git clone https://github.com/AlbertArakelyan/Porthole.git
