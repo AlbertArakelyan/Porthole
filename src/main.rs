@@ -1,10 +1,10 @@
 mod sockets;
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gtk::prelude::*;
+use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use sockets::{KillError, Listener, Proto, Signal};
@@ -15,43 +15,36 @@ const AUTO_REFRESH: Duration = Duration::from_secs(2);
 const CSS: &str = "
 .port {
     font-family: monospace;
-    font-size: 1.35em;
+    font-size: 1.3em;
     font-weight: bold;
 }
 .proto {
     font-size: 0.75em;
     font-weight: bold;
-    padding: 1px 6px;
+    padding: 2px 8px;
     border-radius: 999px;
-    background: alpha(currentColor, 0.1);
 }
-.proto.tcp { color: #1c71d8; }
-.proto.udp { color: #c64600; }
-.process-name { font-weight: bold; }
+.proto.tcp { color: var(--blue-4); background: color-mix(in srgb, var(--blue-3) 15%, transparent); }
+.proto.udp { color: var(--orange-5); background: color-mix(in srgb, var(--orange-3) 18%, transparent); }
 .cmdline { font-family: monospace; font-size: 0.85em; }
-list.listeners row { padding: 8px 12px; }
-list.listeners row.foreign { opacity: 0.6; }
+row.foreign { opacity: 0.55; }
 ";
 
-#[derive(Clone, Copy, PartialEq)]
-enum ProtoFilter {
-    All,
-    Tcp,
-    Udp,
-}
-
 struct Ui {
-    window: gtk::ApplicationWindow,
+    window: adw::ApplicationWindow,
+    title: adw::WindowTitle,
+    toasts: adw::ToastOverlay,
     search: gtk::SearchEntry,
+    filter: adw::ToggleGroup,
+    stack: gtk::Stack,
+    empty: adw::StatusPage,
     list: gtk::ListBox,
-    status: gtk::Label,
     auto_refresh: gtk::ToggleButton,
     listeners: RefCell<Vec<Listener>>,
-    filter: Cell<ProtoFilter>,
 }
 
 fn main() -> glib::ExitCode {
-    let app = gtk::Application::builder().application_id(APP_ID).build();
+    let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| load_css());
     app.connect_activate(build_ui);
     app.run()
@@ -67,96 +60,100 @@ fn load_css() {
     );
 }
 
-fn build_ui(app: &gtk::Application) {
-    let window = gtk::ApplicationWindow::builder()
-        .application(app)
-        .title("Port Inspector")
-        .default_width(640)
-        .default_height(620)
+fn build_ui(app: &adw::Application) {
+    // Header bar
+    let title = adw::WindowTitle::new("Port Inspector", "");
+    let refresh = gtk::Button::builder()
+        .icon_name("view-refresh-symbolic")
+        .tooltip_text("Refresh (F5)")
         .build();
+    let auto_refresh = gtk::ToggleButton::builder()
+        .icon_name("media-playlist-repeat-symbolic")
+        .tooltip_text("Auto-refresh every 2 seconds")
+        .active(true)
+        .build();
+    let header = adw::HeaderBar::builder().title_widget(&title).build();
+    header.pack_start(&refresh);
+    header.pack_end(&auto_refresh);
 
-    // Top bar: search + refresh
+    // Search + protocol filter
     let search = gtk::SearchEntry::builder()
         .placeholder_text("Filter by port, process, PID or user…")
         .hexpand(true)
         .build();
-    let refresh = gtk::Button::with_label("Refresh");
-    refresh.add_css_class("suggested-action");
-    let top = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    top.append(&search);
-    top.append(&refresh);
+    let filter = adw::ToggleGroup::new();
+    for (name, label) in [("all", "All"), ("tcp", "TCP"), ("udp", "UDP")] {
+        filter.add(adw::Toggle::builder().name(name).label(label).build());
+    }
+    filter.set_active_name(Some("all"));
+    let controls = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    controls.append(&search);
+    controls.append(&filter);
 
-    // Listener list
+    // Listener list, or a status page when nothing matches
     let list = gtk::ListBox::builder()
         .selection_mode(gtk::SelectionMode::None)
-        .show_separators(true)
-        .css_classes(["listeners"])
+        .valign(gtk::Align::Start)
+        .css_classes(["boxed-list"])
         .build();
-    list.set_placeholder(Some(&gtk::Label::new(Some("Nothing to show"))));
-    let scroller = gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Never)
+    let empty = adw::StatusPage::builder()
+        .icon_name("network-wired-disconnected-symbolic")
         .vexpand(true)
-        .child(&list)
         .build();
-    let frame = gtk::Frame::builder().child(&scroller).build();
+    let stack = gtk::Stack::new();
+    stack.add_named(&list, Some("list"));
+    stack.add_named(&empty, Some("empty"));
 
-    // Bottom bar: status, protocol filter, auto-refresh
-    let status = gtk::Label::builder()
-        .xalign(0.0)
-        .hexpand(true)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .css_classes(["dim-label"])
-        .build();
-    let all = gtk::ToggleButton::builder().label("All").active(true).build();
-    let tcp = gtk::ToggleButton::builder().label("TCP").group(&all).build();
-    let udp = gtk::ToggleButton::builder().label("UDP").group(&all).build();
-    let filters = gtk::Box::builder().css_classes(["linked"]).build();
-    filters.append(&all);
-    filters.append(&tcp);
-    filters.append(&udp);
-    let auto_refresh = gtk::ToggleButton::builder()
-        .label("Auto-refresh")
-        .active(true)
-        .tooltip_text("Rescan every 2 seconds")
-        .build();
-    let bottom = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    bottom.append(&status);
-    bottom.append(&filters);
-    bottom.append(&auto_refresh);
-
-    let content = gtk::Box::builder()
+    let page = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
-        .spacing(12)
-        .margin_top(12)
-        .margin_bottom(12)
+        .spacing(18)
+        .margin_top(18)
+        .margin_bottom(18)
         .margin_start(12)
         .margin_end(12)
         .build();
-    content.append(&top);
-    content.append(&frame);
-    content.append(&bottom);
-    window.set_child(Some(&content));
+    page.append(&controls);
+    page.append(&stack);
+
+    let clamp = adw::Clamp::builder().maximum_size(860).child(&page).build();
+    let scroller = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .vexpand(true)
+        .child(&clamp)
+        .build();
+    let toasts = adw::ToastOverlay::new();
+    toasts.set_child(Some(&scroller));
+
+    let view = adw::ToolbarView::new();
+    view.add_top_bar(&header);
+    view.set_content(Some(&toasts));
+
+    let window = adw::ApplicationWindow::builder()
+        .application(app)
+        .title("Port Inspector")
+        .default_width(720)
+        .default_height(680)
+        .width_request(360)
+        .height_request(300)
+        .content(&view)
+        .build();
 
     let ui = Rc::new(Ui {
         window: window.clone(),
+        title,
+        toasts,
         search: search.clone(),
+        filter: filter.clone(),
+        stack,
+        empty,
         list,
-        status,
         auto_refresh,
         listeners: RefCell::new(Vec::new()),
-        filter: Cell::new(ProtoFilter::All),
     });
 
     refresh.connect_clicked(glib::clone!(#[weak] ui, move |_| ui.rescan(true)));
     search.connect_search_changed(glib::clone!(#[weak] ui, move |_| ui.render()));
-    for (button, filter) in [(&all, ProtoFilter::All), (&tcp, ProtoFilter::Tcp), (&udp, ProtoFilter::Udp)] {
-        button.connect_toggled(glib::clone!(#[weak] ui, move |b| {
-            if b.is_active() {
-                ui.filter.set(filter);
-                ui.render();
-            }
-        }));
-    }
+    filter.connect_active_name_notify(glib::clone!(#[weak] ui, move |_| ui.render()));
 
     // Ctrl+F focuses search, Ctrl+R / F5 refreshes
     let keys = gtk::EventControllerKey::new();
@@ -205,16 +202,16 @@ impl Ui {
     fn render(self: &Rc<Self>) {
         self.list.remove_all();
         let query = self.search.text().trim().to_lowercase();
-        let filter = self.filter.get();
+        let proto = match self.filter.active_name().as_deref() {
+            Some("tcp") => Some(Proto::Tcp),
+            Some("udp") => Some(Proto::Udp),
+            _ => None,
+        };
         let listeners = self.listeners.borrow();
 
         let visible: Vec<&Listener> = listeners
             .iter()
-            .filter(|l| match filter {
-                ProtoFilter::All => true,
-                ProtoFilter::Tcp => l.proto == Proto::Tcp,
-                ProtoFilter::Udp => l.proto == Proto::Udp,
-            })
+            .filter(|l| proto.is_none_or(|p| l.proto == p))
             .filter(|l| query.is_empty() || matches_query(l, &query))
             .collect();
 
@@ -222,109 +219,94 @@ impl Ui {
             self.list.append(&self.build_row(l));
         }
 
-        let hidden_owner = listeners.iter().filter(|l| l.process.is_none()).count();
-        let mut text = if visible.len() == listeners.len() {
+        if visible.is_empty() {
+            if listeners.is_empty() {
+                self.empty.set_title("No Listening Ports");
+                self.empty.set_description(Some("Nothing on this machine is accepting connections"));
+            } else {
+                self.empty.set_title("No Matches");
+                self.empty.set_description(Some("Try a different port, process name or PID"));
+            }
+            self.stack.set_visible_child_name("empty");
+        } else {
+            self.stack.set_visible_child_name("list");
+        }
+
+        let mut subtitle = if visible.len() == listeners.len() {
             format!("{} listening sockets", listeners.len())
         } else {
             format!("{} of {} listening sockets", visible.len(), listeners.len())
         };
-        if hidden_owner > 0 {
-            text.push_str(&format!(" · {hidden_owner} owned by other users"));
+        let foreign = listeners.iter().filter(|l| l.process.is_none()).count();
+        if foreign > 0 {
+            subtitle.push_str(&format!(" · {foreign} owned by other users"));
         }
-        self.status.set_text(&text);
+        self.title.set_subtitle(&subtitle);
     }
 
-    fn build_row(self: &Rc<Self>, l: &Listener) -> gtk::ListBoxRow {
+    fn build_row(self: &Rc<Self>, l: &Listener) -> adw::ActionRow {
+        let row = adw::ActionRow::builder()
+            .use_markup(false)
+            .subtitle_lines(2)
+            .build();
+
         let port = gtk::Label::builder()
             .label(format!(":{}", l.port))
             .xalign(0.0)
             .width_chars(7)
             .css_classes(["port"])
-            .selectable(true)
             .build();
+        row.add_prefix(&port);
 
         let proto = gtk::Label::builder()
             .label(l.proto.label())
             .valign(gtk::Align::Center)
             .css_classes(["proto", if l.proto == Proto::Tcp { "tcp" } else { "udp" }])
             .build();
-        let name = gtk::Label::builder()
-            .xalign(0.0)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .css_classes(["process-name"])
-            .build();
-        let title = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        title.append(&name);
-        title.append(&proto);
-
-        let details = gtk::Label::builder()
-            .xalign(0.0)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .css_classes(["dim-label", "caption"])
-            .build();
-        let cmdline = gtk::Label::builder()
-            .xalign(0.0)
-            .ellipsize(gtk::pango::EllipsizeMode::Middle)
-            .css_classes(["dim-label", "cmdline"])
-            .build();
-
-        let kill = gtk::Button::builder()
-            .label("Kill")
-            .valign(gtk::Align::Center)
-            .css_classes(["destructive-action"])
-            .build();
+        row.add_suffix(&proto);
 
         match &l.process {
             Some(p) => {
-                name.set_text(&p.name);
-                details.set_text(&format!("PID {} · {} · {}", p.pid, l.user, l.address_label()));
-                cmdline.set_text(&p.cmdline);
-                cmdline.set_tooltip_text(Some(&p.cmdline));
-                cmdline.set_visible(!p.cmdline.is_empty());
+                row.set_title(&p.name);
+                let mut subtitle = format!("PID {} · {} · {}", p.pid, l.user, l.address_label());
+                if !p.cmdline.is_empty() {
+                    subtitle.push('\n');
+                    subtitle.push_str(&p.cmdline);
+                }
+                row.set_subtitle(&subtitle);
+                row.set_tooltip_text(Some(&p.cmdline));
 
+                let kill = gtk::Button::builder()
+                    .label("Kill")
+                    .valign(gtk::Align::Center)
+                    .css_classes(["destructive-action"])
+                    .build();
                 let (ui, l) = (Rc::downgrade(self), l.clone());
                 kill.connect_clicked(move |_| {
                     if let Some(ui) = ui.upgrade() {
                         glib::spawn_future_local(ui.confirm_kill(l.clone()));
                     }
                 });
+                row.add_suffix(&kill);
             }
             None => {
-                name.set_text("Unknown process");
-                details.set_text(&format!("{} · {}", l.user, l.address_label()));
-                cmdline.set_text("Owned by another user — run with sudo to see details");
-                kill.set_visible(false);
+                row.set_title("Unknown process");
+                row.set_subtitle(&format!(
+                    "{} · {}\nOwned by another user — run with sudo to see details",
+                    l.user,
+                    l.address_label()
+                ));
+                row.add_css_class("foreign");
             }
-        }
-
-        let info = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(2)
-            .hexpand(true)
-            .valign(gtk::Align::Center)
-            .build();
-        info.append(&title);
-        info.append(&details);
-        info.append(&cmdline);
-
-        let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        hbox.append(&port);
-        hbox.append(&info);
-        hbox.append(&kill);
-
-        let row = gtk::ListBoxRow::builder().child(&hbox).activatable(false).build();
-        if l.process.is_none() {
-            row.add_css_class("foreign");
         }
         row
     }
 
     async fn confirm_kill(self: Rc<Self>, l: Listener) {
         let Some(p) = &l.process else { return };
-        let dialog = gtk::AlertDialog::builder()
-            .modal(true)
-            .message(format!("Stop “{}”?", p.name))
-            .detail(format!(
+        let dialog = adw::AlertDialog::builder()
+            .heading(format!("Stop “{}”?", p.name))
+            .body(format!(
                 "PID {} is listening on {} port {}.\n\n\
                  Terminate asks the process to shut down cleanly. \
                  Force Kill stops it immediately and may lose unsaved data.",
@@ -332,40 +314,39 @@ impl Ui {
                 l.proto.label(),
                 l.port
             ))
-            .buttons(["Cancel", "Force Kill", "Terminate"])
-            .cancel_button(0)
-            .default_button(2)
+            .close_response("cancel")
+            .default_response("term")
             .build();
+        dialog.add_responses(&[("cancel", "Cancel"), ("kill", "Force Kill"), ("term", "Terminate")]);
+        dialog.set_response_appearance("kill", adw::ResponseAppearance::Destructive);
+        dialog.set_response_appearance("term", adw::ResponseAppearance::Suggested);
 
-        let signal = match dialog.choose_future(Some(&self.window)).await {
-            Ok(1) => Signal::Kill,
-            Ok(2) => Signal::Term,
+        let signal = match dialog.choose_future(Some(&self.window)).await.as_str() {
+            "kill" => Signal::Kill,
+            "term" => Signal::Term,
             _ => return,
         };
 
         match sockets::send_signal(p.pid, signal) {
-            Ok(()) => {
-                self.flash(&format!("Sent SIG{} to {} (PID {})", signal.name(), p.name, p.pid));
-                self.rescan_soon();
-            }
+            Ok(()) => self.signal_sent(p, signal),
             Err(KillError::PermissionDenied) => self.offer_elevated_kill(p, signal).await,
-            Err(KillError::Other(e)) => self.flash(&format!("Couldn't signal PID {}: {e}", p.pid)),
+            Err(KillError::Other(e)) => self.toast(&format!("Couldn't signal PID {}: {e}", p.pid)),
         }
     }
 
     async fn offer_elevated_kill(self: &Rc<Self>, p: &sockets::Process, signal: Signal) {
-        let dialog = gtk::AlertDialog::builder()
-            .modal(true)
-            .message("Permission Denied")
-            .detail(format!(
+        let dialog = adw::AlertDialog::builder()
+            .heading("Permission Denied")
+            .body(format!(
                 "“{}” (PID {}) belongs to another user. Stopping it requires administrator rights.",
                 p.name, p.pid
             ))
-            .buttons(["Cancel", "Authenticate…"])
-            .cancel_button(0)
-            .default_button(1)
+            .close_response("cancel")
+            .default_response("auth")
             .build();
-        if dialog.choose_future(Some(&self.window)).await != Ok(1) {
+        dialog.add_responses(&[("cancel", "Cancel"), ("auth", "Authenticate…")]);
+        dialog.set_response_appearance("auth", adw::ResponseAppearance::Suggested);
+        if dialog.choose_future(Some(&self.window)).await != "auth" {
             return;
         }
 
@@ -376,16 +357,14 @@ impl Ui {
             Err(e) => Err(e),
         };
         match result {
-            Ok(()) => {
-                self.flash(&format!("Sent SIG{} to {} (PID {})", signal.name(), p.name, p.pid));
-                self.rescan_soon();
-            }
-            Err(e) => self.flash(&format!("Administrator kill failed: {}", e.message())),
+            Ok(()) => self.signal_sent(p, signal),
+            Err(e) => self.toast(&format!("Administrator kill failed: {}", e.message())),
         }
     }
 
-    /// Gives the process a moment to release its socket before rescanning.
-    fn rescan_soon(self: &Rc<Self>) {
+    fn signal_sent(self: &Rc<Self>, p: &sockets::Process, signal: Signal) {
+        self.toast(&format!("Sent SIG{} to {} (PID {})", signal.name(), p.name, p.pid));
+        // Give the process a moment to release its socket before rescanning.
         let weak = Rc::downgrade(self);
         glib::timeout_add_local_once(Duration::from_millis(400), move || {
             if let Some(ui) = weak.upgrade() {
@@ -394,15 +373,9 @@ impl Ui {
         });
     }
 
-    /// Shows a transient message in the status line.
-    fn flash(self: &Rc<Self>, msg: &str) {
-        self.status.set_text(msg);
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_local_once(Duration::from_secs(4), move || {
-            if let Some(ui) = weak.upgrade() {
-                ui.render();
-            }
-        });
+    fn toast(&self, msg: &str) {
+        let toast = adw::Toast::builder().title(msg).use_markup(false).build();
+        self.toasts.add_toast(toast);
     }
 }
 
