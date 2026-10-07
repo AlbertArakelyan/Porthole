@@ -15,6 +15,10 @@ See what's listening on your ports and kill it in one click. A small native GTK4
 
 For now you need to build it from source. Ready-made packages are coming soon.
 
+### Install from package
+
+Coming soon...
+
 ### Build from source
 
 #### 1. Install dependencies
