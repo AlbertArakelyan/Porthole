@@ -64,3 +64,7 @@ The binary ends up in `target/release/porthole`. Copy it anywhere on your `PATH`
 ## Good to know
 
 Linux only shows you details of your own processes. Ports opened by root or system services show up as "Unknown process". Run the app with `sudo` if you want to see those too.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
