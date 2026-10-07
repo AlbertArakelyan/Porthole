@@ -2,7 +2,7 @@
 
 See what's listening on your ports and kill it in one click. A small native GTK4 + libadwaita app for Linux.
 
-![Port Inspector](data/screenshot.png)
+![Porthole](data/screenshot.png)
 
 ## Features
 
@@ -47,7 +47,7 @@ cd Porthole
 cargo run --release
 ```
 
-The binary ends up in `target/release/port-process-inspector`. Copy it anywhere on your `PATH` if you want to run it directly.
+The binary ends up in `target/release/porthole`. Copy it anywhere on your `PATH` if you want to run it directly.
 
 ## Good to know
 

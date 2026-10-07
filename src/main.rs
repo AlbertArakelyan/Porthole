@@ -9,7 +9,7 @@ use gtk::{gdk, gio, glib};
 
 use sockets::{KillError, Listener, Proto, Signal};
 
-const APP_ID: &str = "dev.albert.PortInspector";
+const APP_ID: &str = "io.github.albertarakelyan.Porthole";
 const AUTO_REFRESH: Duration = Duration::from_secs(2);
 
 const CSS: &str = "
@@ -62,7 +62,7 @@ fn load_css() {
 
 fn build_ui(app: &adw::Application) {
     // Header bar
-    let title = adw::WindowTitle::new("Port Inspector", "");
+    let title = adw::WindowTitle::new("Porthole", "");
     let refresh = gtk::Button::builder()
         .icon_name("view-refresh-symbolic")
         .tooltip_text("Refresh (F5)")
@@ -130,7 +130,7 @@ fn build_ui(app: &adw::Application) {
 
     let window = adw::ApplicationWindow::builder()
         .application(app)
-        .title("Port Inspector")
+        .title("Porthole")
         .default_width(720)
         .default_height(680)
         .width_request(360)
