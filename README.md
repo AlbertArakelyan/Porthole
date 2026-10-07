@@ -1,4 +1,4 @@
-# Port Inspector
+# Porthole
 
 See what's listening on your ports and kill it in one click. A small native GTK4 + libadwaita app for Linux.
 
