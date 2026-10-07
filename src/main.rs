@@ -44,8 +44,13 @@ struct Ui {
 }
 
 fn main() -> glib::ExitCode {
+    gio::resources_register_include!("porthole.gresource").expect("failed to register resources");
+
     let app = adw::Application::builder().application_id(APP_ID).build();
-    app.connect_startup(|_| load_css());
+    app.connect_startup(|_| {
+        load_css();
+        gtk::Window::set_default_icon_name(APP_ID);
+    });
     app.connect_activate(build_ui);
     app.run()
 }

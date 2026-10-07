@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <!-- GtkApplication adds <resource base path>/icons to the icon theme -->
+  <gresource prefix="/io/github/albertarakelyan/Porthole/icons/scalable/apps">
+    <file alias="io.github.albertarakelyan.Porthole.svg">icons/hicolor/scalable/apps/io.github.albertarakelyan.Porthole.svg</file>
+  </gresource>
+</gresources>
