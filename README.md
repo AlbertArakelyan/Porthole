@@ -2,11 +2,13 @@
   <img src="data/icons/hicolor/scalable/apps/io.github.albertarakelyan.Porthole.svg" width="128" alt="Porthole logo">
 </p>
 
-# Porthole
+<h1 align="center">Porthole</h1>
 
-See what's listening on your ports and kill it in one click. A small native GTK4 + libadwaita app for Linux.
+<p align="center">See what's listening on your ports and kill it in one click. A small native GTK4 + libadwaita app for Linux.</p>
 
-![Porthole](data/screenshot.png)
+<p align="center">
+  <img src="data/screenshot.png" alt="Porthole screenshot">
+</p>
 
 ## Features
 
