@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#77767b"/>
+      <stop offset="1" stop-color="#3d3846"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#1a5fb4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ring -->
+  <circle cx="64" cy="64" r="58" fill="url(#ring)"/>
+  <circle cx="64" cy="64" r="44" fill="#241f31"/>
+
+  <!-- bolts -->
+  <g fill="#deddda">
+    <circle cx="64" cy="13" r="3.5"/>
+    <circle cx="100.1" cy="27.9" r="3.5"/>
+    <circle cx="115" cy="64" r="3.5"/>
+    <circle cx="100.1" cy="100.1" r="3.5"/>
+    <circle cx="64" cy="115" r="3.5"/>
+    <circle cx="27.9" cy="100.1" r="3.5"/>
+    <circle cx="13" cy="64" r="3.5"/>
+    <circle cx="27.9" cy="27.9" r="3.5"/>
+  </g>
+
+  <!-- glass -->
+  <circle cx="64" cy="64" r="40" fill="url(#glass)"/>
+  <path d="M34 52 A32 32 0 0 1 52 34" fill="none" stroke="#fff" stroke-opacity="0.45" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- network port -->
+  <path d="M45 52 H83 V72 H75 V79 H53 V72 H45 Z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+  <g stroke="#fff" stroke-width="3" stroke-linecap="round">
+    <line x1="56" y1="58" x2="56" y2="63"/>
+    <line x1="64" y1="58" x2="64" y2="63"/>
+    <line x1="72" y1="58" x2="72" y2="63"/>
+  </g>
+</svg>
